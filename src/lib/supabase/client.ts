@@ -26,7 +26,14 @@ export function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Supabase URL and Anon Key must be defined");
+    throw new Error("Supabase URL and Anon Key must be defined in your environment variables.");
+  }
+
+  // Validate URL to prevent `@supabase/ssr` from crashing with a cryptic error
+  try {
+    new URL(supabaseUrl);
+  } catch (err) {
+    throw new Error(`Invalid Supabase URL: "${supabaseUrl}". Please check your .env.local file.`);
   }
 
   return createBrowserClient(supabaseUrl, supabaseAnonKey);
