@@ -1,5 +1,7 @@
 # CampusConnect: Every club. Every event. One brutally simple OS.
 
+**🗣️ Join our Discord Server for all contributors:** [https://discord.gg/BEMjApACe](https://discord.gg/BEMjApACe)
+
 ![License](https://img.shields.io/github/license/krushit1307/CampusConnect?style=flat-square)
 ![Open Issues](https://img.shields.io/github/issues/krushit1307/CampusConnect?style=flat-square)
 ![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)
