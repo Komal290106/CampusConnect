@@ -129,9 +129,7 @@ export function CreateEventDialog({ user }: { user: User | null }) {
       <DialogContent className="neu-border neu-shadow bg-cream sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Create a new event</DialogTitle>
-          <DialogDescription>
-            Fill in the details below. All fields are required.
-          </DialogDescription>
+          <DialogDescription>Fill in the details below. All fields are required.</DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
@@ -157,11 +155,7 @@ export function CreateEventDialog({ user }: { user: User | null }) {
                 <FormItem>
                   <FormLabel>Description</FormLabel>
                   <FormControl>
-                    <Textarea
-                      placeholder="What's this event about?"
-                      rows={4}
-                      {...field}
-                    />
+                    <Textarea placeholder="What's this event about?" rows={4} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
