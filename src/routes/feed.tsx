@@ -5,6 +5,26 @@ import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
 import { User } from "@supabase/supabase-js";
 import ReactMarkdown from "react-markdown";
+import { toast } from "sonner";
+import { MoreVertical, Flag } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+
+type ReportReason = "spam" | "harassment" | "inappropriate";
 
 export const Route = createFileRoute("/feed")({
   head: () => ({
@@ -25,6 +45,8 @@ function Feed() {
   const [user, setUser] = useState<User | null>(null);
   const [newPost, setNewPost] = useState("");
   const [newComments, setNewComments] = useState<Record<string, string>>({});
+  const [reportPostId, setReportPostId] = useState<string | null>(null);
+  const [reportReason, setReportReason] = useState<ReportReason>("spam");
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setUser(user));
@@ -122,6 +144,32 @@ function Feed() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["posts"] }),
   });
 
+  const reportMutation = useMutation({
+    mutationFn: async ({ postId, reason }: { postId: string; reason: ReportReason }) => {
+      if (!user) throw new Error("Must be logged in");
+      const { error } = await supabase.from("reports").insert({
+        post_id: postId,
+        reporter_id: user.id,
+        reason,
+      });
+      if (error) {
+        // Postgres unique_violation
+        if (error.code === "23505") {
+          throw new Error("You've already reported this post.");
+        }
+        throw new Error(error.message);
+      }
+    },
+    onSuccess: () => {
+      toast.success("Report submitted. A moderator will review it.");
+      setReportPostId(null);
+      setReportReason("spam");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Something went wrong. Please try again.");
+    },
+  });
+
   const timeAgo = (dateString: string) => {
     const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
     const diff = new Date().getTime() - new Date(dateString).getTime();
@@ -198,9 +246,32 @@ function Feed() {
                         in {club?.name || "Unknown Club"} · {timeAgo(p.created_at)}
                       </p>
                     </div>
-                    <span className="neu-border bg-lime px-2 py-1 font-mono text-[10px] font-bold uppercase">
-                      Post
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="neu-border bg-lime px-2 py-1 font-mono text-[10px] font-bold uppercase">
+                        Post
+                      </span>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            aria-label="Post options"
+                            className="neu-border bg-white p-1 hover:bg-cream"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              if (!user) return alert("Log in first");
+                              setReportPostId(p.id);
+                            }}
+                          >
+                            <Flag className="mr-2 h-4 w-4" />
+                            Report
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </header>
                   <div className="markdown-content mt-2 font-mono text-sm leading-relaxed">
                     <ReactMarkdown>{p.content}</ReactMarkdown>
@@ -250,6 +321,47 @@ function Feed() {
           )}
         </div>
       </section>
+
+      <Dialog open={reportPostId !== null} onOpenChange={(open) => !open && setReportPostId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Report this post</DialogTitle>
+          </DialogHeader>
+          <RadioGroup
+            value={reportReason}
+            onValueChange={(value) => setReportReason(value as ReportReason)}
+            className="gap-3 py-2"
+          >
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="spam" id="reason-spam" />
+              <Label htmlFor="reason-spam">Spam</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="harassment" id="reason-harassment" />
+              <Label htmlFor="reason-harassment">Harassment</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="inappropriate" id="reason-inappropriate" />
+              <Label htmlFor="reason-inappropriate">Inappropriate</Label>
+            </div>
+          </RadioGroup>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReportPostId(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (reportPostId) {
+                  reportMutation.mutate({ postId: reportPostId, reason: reportReason });
+                }
+              }}
+              disabled={reportMutation.isPending}
+            >
+              Submit report
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </SiteShell>
   );
 }
