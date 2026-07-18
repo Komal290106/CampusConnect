@@ -73,6 +73,7 @@ export default function Feed() {
   const [newPost, setNewPost] = useState("");
   const editorRef = useRef<MarkdownEditorRef>(null);
   const [newComments, setNewComments] = useState<Record<string, string>>({});
+  const [showNewPostsBanner, setShowNewPostsBanner] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setUser(user));
@@ -149,6 +150,22 @@ export default function Feed() {
   });
 
   const posts = data?.pages.flatMap((page) => page.posts) ?? [];
+
+  const postsRef = useRef(posts);
+  const userRef = useRef(user);
+
+  useEffect(() => {
+    postsRef.current = posts;
+  }, [posts]);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  const handleRefetch = useCallback(() => {
+    setShowNewPostsBanner(false);
+    refetchPosts();
+  }, [refetchPosts]);
   const observer = useRef<IntersectionObserver | null>(null);
   const lastPostElementRef = useCallback(
     (node: HTMLElement | null) => {
@@ -171,15 +188,23 @@ export default function Feed() {
   useEffect(() => {
     const channel = supabase
       .channel("realtime_feed")
-      .on("postgres_changes", { event: "*", schema: "public", table: "posts" }, () =>
-        refetchPosts(),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "comments" }, () =>
-        refetchPosts(),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "post_reactions" }, () =>
-        refetchPosts(),
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "posts" }, (payload) => {
+        if (payload.eventType === "INSERT") {
+          const isOwnPost = payload.new && payload.new.author_id === userRef.current?.id;
+          const alreadyExists = postsRef.current.some((p) => p.id === payload.new.id);
+          if (!isOwnPost && !alreadyExists) {
+            setShowNewPostsBanner(true);
+            return;
+          }
+        }
+        refetchPosts();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "comments" }, () => {
+        refetchPosts();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "post_reactions" }, () => {
+        refetchPosts();
+      })
       .subscribe();
 
     return () => {
@@ -297,7 +322,7 @@ export default function Feed() {
 
   return (
     <SiteShell>
-      <PullToRefresh isRefreshing={isLoading || isFetching} onRefresh={() => refetchPosts()}>
+      <PullToRefresh isRefreshing={isLoading || isFetching} onRefresh={handleRefetch}>
         <section className="border-b-2 border-black bg-peach px-4 py-14 md:px-6">
           <div className="mx-auto max-w-4xl">
             <p className="eyebrow font-bold">Discussion feed</p>
@@ -351,6 +376,33 @@ export default function Feed() {
                 </p>
               )}
             </div>
+
+            <style>{`
+              @keyframes slideDown {
+                from {
+                  opacity: 0;
+                  transform: translateY(-10px);
+                }
+                to {
+                  opacity: 1;
+                  transform: translateY(0);
+                }
+              }
+            `}</style>
+
+            {showNewPostsBanner && (
+              <button
+                type="button"
+                onClick={handleRefetch}
+                style={{
+                  animation: "slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+                }}
+                className="neu-border flex w-full items-center justify-center gap-2 bg-[#FFD93D] hover:bg-[#FFD93D]/90 py-3 text-center font-display text-sm font-bold uppercase transition-all shadow-[4px_4px_0_0_#000] hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[6px_6px_0_0_#000] active:translate-x-[0px] active:translate-y-[0px] active:shadow-[4px_4px_0_0_#000] cursor-pointer"
+              >
+                <Sparkles size={16} className="animate-pulse" />
+                New posts available (Refresh)
+              </button>
+            )}
 
             {isLoading ? (
               <div className="space-y-6">
